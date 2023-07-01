@@ -1,0 +1,117 @@
+---
+title: "text analysis"
+author: "Giorgio"
+date: '2022-06-27'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+```
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidytext)
+library(widyr)
+library(igraph)
+library(ggraph)
+```
+
+```{r cars}
+user_reviews <- read_tsv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-05/user_reviews.tsv')
+
+```
+
+```{r pressure, echo=FALSE}
+glimpse(user_reviews)
+```
+
+#basic eda
+
+```{r}
+user_reviews %>%  count(user_name,sort = T)
+user_reviews %>% head(10) %>% pull(text) 
+```
+
+```{r}
+user_reviews %>% unnest_tokens(output = word, input = text) %>% count(word,sort = T)
+
+```
+
+```{r}
+review_words <-
+  user_reviews %>% select(-date) %>%  unnest_tokens(output = word,input = text) %>% 
+  anti_join(stop_words,by="word") %>% 
+  filter(str_detect(word,"[:alpha:]")) %>% 
+  distinct()
+
+```
+
+```{r}
+user_who_mention_word <- review_words %>%
+  count(word,name = "users_n") %>% filter(users_n >=100)
+
+word_correlation <- review_words %>% semi_join(user_who_mention_word,by="word") %>% 
+  pairwise_cor(item = word,feature = user_name) %>% filter(correlation>=0.2)
+
+```
+
+```{r}
+graph_from_data_frame(d=word_correlation,
+                      vertices = user_who_mention_word) %>% 
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha=correlation))+
+  geom_node_point()+
+  geom_node_text(aes(color=users_n, label=name), repel = T)
+```
+
+```{r}
+
+```
+
+
+```{r}
+generate_word_graph <- function(review_words,minimum_users_n = 100,minimum_correlation=0.2){
+  
+  user_who_mention_word <- review_words %>%
+  count(word,name = "users_n") %>% filter(users_n >= minimum_users_n)
+
+  word_correlation <- review_words %>% semi_join(user_who_mention_word,by="word") %>% 
+  pairwise_cor(item = word,feature = user_name) %>% filter(correlation>= minimum_correlation)
+  
+  graph_from_data_frame(d=word_correlation,
+                      vertices = user_who_mention_word) %>% 
+  ggraph(layout = "fr")+
+  geom_edge_link(aes(alpha=correlation))+
+  geom_node_point()+
+  geom_node_text(aes(color=users_n, label=name), repel = T)
+}
+```
+
+```{r}
+review_words %>% generate_word_graph(minimum_users_n = 100,minimum_correlation = 0.2)
+```
+
+```{r}
+review_words %>% generate_word_graph(minimum_users_n = 50,minimum_correlation = 0.2)
+```
+
+```{r}
+user_reviews %>% count(grade)
+
+review_words.NEGATIVE <- review_words %>% filter(grade < 5)
+
+review_words.POSITIVE<- review_words %>% filter(grade >= 5)
+
+
+```
+
+```{r}
+review_words.NEGATIVE %>% generate_word_graph(minimum_users_n = 50,minimum_correlation = 0.2)
+```
+
+```{r}
+review_words.POSITIVE %>% generate_word_graph(minimum_users_n = 30,minimum_correlation = 0.25)
+```
